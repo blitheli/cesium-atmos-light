@@ -15,6 +15,7 @@ export interface BrunetonAtmosphereOptions {
 }
 
 export interface BrunetonAtmosphereHandle {
+  setEnabled(enabled: boolean): void;
   destroy(): void;
 }
 
@@ -78,19 +79,29 @@ export async function enableBrunetonAtmosphere(
   viewer.scene.postProcessStages.add(sky.stage);
   viewer.scene.postProcessStages.add(aerial.stage);
 
+  const applyNativeAtmosphere = (showNative: boolean) => {
+    if (viewer.scene.skyAtmosphere) {
+      viewer.scene.skyAtmosphere.show = showNative;
+    }
+    viewer.scene.globe.showGroundAtmosphere = showNative;
+    if (viewer.scene.sun) {
+      viewer.scene.sun.show = showNative;
+    }
+  };
+
   return {
+    setEnabled(next: boolean) {
+      if (!sky.stage || !aerial.stage) return;
+      sky.stage.enabled = next;
+      aerial.stage.enabled = next;
+      applyNativeAtmosphere(!next);
+    },
     destroy() {
       sky.destroy();
       aerial.destroy();
       dummy.destroy();
       destroyTextures(textures);
-      if (viewer.scene.skyAtmosphere) {
-        viewer.scene.skyAtmosphere.show = true;
-      }
-      viewer.scene.globe.showGroundAtmosphere = true;
-      if (viewer.scene.sun) {
-        viewer.scene.sun.show = true;
-      }
+      applyNativeAtmosphere(true);
     },
   };
 }

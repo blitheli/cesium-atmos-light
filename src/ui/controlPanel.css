@@ -1,0 +1,96 @@
+.control-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  width: min(260px, calc(100vw - 24px));
+  color: #e8eef5;
+  font: 12px/1.4 "Segoe UI", system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.control-panel__toggle {
+  pointer-events: auto;
+  float: right;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #e8eef5;
+  background: rgba(8, 14, 24, 0.72);
+  cursor: pointer;
+}
+
+.control-panel__toggle:hover {
+  background: rgba(16, 28, 44, 0.85);
+}
+
+.control-panel__body {
+  pointer-events: auto;
+  clear: both;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(8, 14, 24, 0.78);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.control-panel__section + .control-panel__section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.control-panel__label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(232, 238, 245, 0.65);
+}
+
+.control-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.control-panel__btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 5px 9px;
+  color: #e8eef5;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.control-panel__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.control-panel__btn.is-active {
+  border-color: rgba(110, 180, 255, 0.7);
+  background: rgba(56, 120, 200, 0.45);
+}
+
+.control-panel__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.control-panel__switches {
+  display: grid;
+  gap: 6px;
+}
+
+.control-panel__switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.control-panel__switch input {
+  accent-color: #6eb4ff;
+}
