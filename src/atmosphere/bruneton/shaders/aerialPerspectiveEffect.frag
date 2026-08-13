@@ -8,7 +8,7 @@ in vec2 v_textureCoordinates;
 uniform vec3 u_cameraPosition; // km
 uniform vec3 u_altitudeCorrection; // km
 uniform vec3 u_sunDirection;
-// 曝光在上一 pass（AtmospherePostProcess）线性段完成；此处仅做 ACES + gamma
+uniform float u_atmosphereExposure;
 // three-geospatial 对齐：直接采样 shadowLengthBuffer（这里沿用现有 uniform 命名）
 uniform int u_cloudShadowLengthEnabled;
 uniform float u_cloudShadowLengthScale;
@@ -34,18 +34,27 @@ const float METER_TO_LENGTH_UNIT = 0.001; // m -> km
 
 float saturateAP(float x) { return clamp(x, 0.0, 1.0); }
 
-vec3 ACESFilmic(vec3 x) {
-  float a = 2.51;
-  float b = 0.03;
-  float c = 2.43;
-  float d = 0.59;
-  float e = 0.14;
-  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
-// AtmospherePostProcess 已输出曝光后的线性 HDR；关闭 ACES/gamma，交给 Cesium HDR PBR Neutral
 vec4 tonemapDisplay(vec3 linearHdr, float a) {
   return vec4(linearHdr, a);
+}
+
+// Cesium's PBR Neutral tonemapper runs before custom stages and already writes
+// gamma-encoded display color. PostProcessStage shaders do not define HDR, so
+// czm_gammaCorrect is a no-op — decode with czm_gamma explicitly, apply
+// transmittance in display-linear space, tonemap new inscatter, then encode once.
+vec4 compositeAerialDisplay(
+  vec4 originalColor,
+  vec3 transmittance,
+  vec3 inscatter
+) {
+  vec3 sceneDisplayLinear =
+    pow(max(originalColor.rgb, vec3(0.0)), vec3(czm_gamma));
+  vec3 atmosphereDisplayLinear =
+    czm_pbrNeutralTonemapping(inscatter * u_atmosphereExposure);
+  vec3 finalDisplayLinear =
+    sceneDisplayLinear * clamp(transmittance, vec3(0.0), vec3(1.0)) +
+    atmosphereDisplayLinear;
+  return vec4(czm_inverseGamma(max(finalDisplayLinear, vec3(0.0))), originalColor.a);
 }
 
 void reconstructRay(out vec3 ro, out vec3 rd) {
@@ -339,8 +348,15 @@ void main() {
       transmittanceW
     );
     float sunTW = getGroundSunTransmittance(scenePosKmApprox / METER_TO_LENGTH_UNIT);
-    vec3 finalColorW = originalColor.rgb * transmittanceW * sunTW + inscatterW;
-    out_FragColor = tonemapDisplay(finalColorW, originalColor.a);
+    vec4 attenuatedColorW = vec4(
+      originalColor.rgb * sunTW,
+      originalColor.a
+    );
+    out_FragColor = compositeAerialDisplay(
+      attenuatedColorW,
+      transmittanceW,
+      inscatterW
+    );
     return;
   }
   eyePos /= eyePos.w;
@@ -399,8 +415,11 @@ void main() {
     rawForBSM = rawWorldPosMeters;
   }
   float sunT = getGroundSunTransmittance(rawForBSM);
-  vec3 finalColor = originalColor.rgb * transmittance * sunT + inscatter;
-
-  out_FragColor = tonemapDisplay(finalColor, originalColor.a);
+  vec4 attenuatedColor = vec4(originalColor.rgb * sunT, originalColor.a);
+  out_FragColor = compositeAerialDisplay(
+    attenuatedColor,
+    transmittance,
+    inscatter
+  );
 }
 

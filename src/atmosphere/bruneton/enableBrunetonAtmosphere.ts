@@ -16,6 +16,7 @@ export interface BrunetonAtmosphereOptions {
 
 export interface BrunetonAtmosphereHandle {
   setEnabled(enabled: boolean): void;
+  setExposure(exposure: number): void;
   destroy(): void;
 }
 
@@ -95,6 +96,10 @@ export async function enableBrunetonAtmosphere(
       sky.stage.enabled = next;
       aerial.stage.enabled = next;
       applyNativeAtmosphere(!next);
+    },
+    setExposure(next: number) {
+      sky.setExposure(next);
+      aerial.setExposure(next);
     },
     destroy() {
       sky.destroy();

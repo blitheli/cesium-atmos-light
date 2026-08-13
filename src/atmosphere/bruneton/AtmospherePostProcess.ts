@@ -88,6 +88,13 @@ uniform int u_renderSky;
 
 const float MAX_FLOAT = 1e20;
 
+// Cesium executes user PostProcessStages after its HDR tonemapper. Convert only
+// newly generated Bruneton radiance to the same display-referred color space.
+vec3 brunetonToDisplay(vec3 linearColor) {
+  linearColor = max(linearColor, vec3(0.0));
+  return czm_inverseGamma(czm_pbrNeutralTonemapping(linearColor));
+}
+
 // 2×2 图集：cascade 0=左上, 1=右上, 2=左下, 3=右下
 vec2 getCloudShadowAtlasOffset(int ci) {
   float x = mod(float(ci), 2.0) * 0.5;
@@ -484,7 +491,7 @@ void main() {
         shadowLength,
         u_sunDirection
       );
-      finalColor = skyRadiance;
+      finalColor = brunetonToDisplay(skyRadiance * u_atmosphereExposure);
   } else if (u_applyGroundAtmosphere == 0) {
     // 地面/几何交给后续 AerialPerspectiveEffect 等单独 pass，避免两次 * transmittance + inscatter
     finalColor = originalColor.rgb;
@@ -502,8 +509,9 @@ void main() {
     finalColor = originalColor.rgb * transmittance * sunTransmittance + inscatter;
   }
 
-  // 线性 HDR + 单次曝光；ACES/gamma 仅在后接 AerialPerspectiveEffect 中做，避免两道 ACES 叠乘过曝
-  out_FragColor = vec4(finalColor * u_atmosphereExposure, originalColor.a);
+  // DEBUG: visualize sky classification (remove after diagnosis)
+  if (isSky) { finalColor = vec3(1.0, 0.0, 0.0); }
+  out_FragColor = vec4(finalColor, originalColor.a);
 }
 `;
 
@@ -554,6 +562,10 @@ export class AtmospherePostProcess {
     this._renderSky = true;
     this.stage = null;
     this._ready = null;
+  }
+
+  setExposure(exposure: number): void {
+    this._atmosphereExposure = exposure;
   }
 
   async init(): Promise<void> {

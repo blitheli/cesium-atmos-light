@@ -8,13 +8,23 @@
 
 **Tech Stack:** cesium ^1.140.0, react ^18.3.0, vite ^6.0.0, typescript ^5.6.0, vite-plugin-cesium ^1.2.23（满足 spec 的 ^1.1.0）, @vitejs/plugin-react, vitest ^3.0.0。Bruneton 改编自 yuwoniu03/cesium-clouds-atmosphere（MIT）。
 
+## 2026-08-13 修订（覆盖下方旧代码片段）
+
+运行时验证发现原计划有三项错误假设，后续 Agent 必须以本节和设计文档 §7.1 为准：
+
+1. Cesium 1.140 先执行内置 PBR Neutral tonemap，再执行用户 `PostProcessStage`。Bruneton stage 不得再把输入当作线性 HDR；天空辐亮度需单独显示映射，aerial 需在显示线性空间合成。
+2. ISS 自定义 `ShadowMap` 必须使用 `fromLightSource: true`。旧 Task 5 里的 `false` 只适合分析纹理，Model 不会接收其阴影。
+3. 408 km 视角必须设置 `globe.lightingFadeOutDistance = 0`、`lightingFadeInDistance = 1`，否则 Cesium 默认距离淡出会把地球昼夜光照混合回全亮。
+
+回归测试位于 `src/renderPipeline.test.ts`。修改 Task 3、5、7 涉及文件时必须运行该测试，并做 Bruneton/原生、阴影开/关、正午/晨昏三组浏览器对比。
+
 ## Global Constraints
 
 - Cesium JS `^1.140.0`；只加载 `/iss-cesium.glb`，不加载 `iss.glb`。
 - 镜头：经度 `-110`、纬度 `45`、高度 `408000` m、年积日 150、地方平太阳时 17:00 → UTC `2026-05-31T00:20:00.000Z`。
 - `scene.light` 保持默认 `SunLight`；禁止 `Simon1994PlanetaryPositions` 和手写 ICRF。
 - `getSunDirectionWc(viewer)` 只克隆 `viewer.scene.context.uniformState.sunDirectionWC`。
-- Bruneton 输出线性 HDR；关掉移植里的 ACES/gamma/OETF；显示映射只走 Cesium HDR PBR Neutral。
+- Bruneton 用户 stage 位于 Cesium tonemap 后：天空使用 Cesium PBR Neutral 函数显示映射；aerial 在显示线性空间近似合成。禁止恢复移植代码中的 ACES。
 - 不引入体积云、BSM、TAA、镜头光晕、dat.gui、Google 3D Tiles、NPM 发包、太阳能板对日。
 - GLSL 用 Vite `?raw`；LUT `.bin` 放 `public/atmosphere/`。
 - `enableBrunetonAtmosphere(viewer, options?) → Promise<Handle>`；失败不改 `skyAtmosphere.show`。
@@ -476,6 +486,10 @@ export function createViewer(options: {
   viewer.clock.shouldAnimate = false;
   viewer.resolutionScale = window.devicePixelRatio;
   viewer.scene.globe.enableLighting = true;
+  viewer.scene.globe.lightingFadeOutDistance = 0;
+  viewer.scene.globe.lightingFadeInDistance = 1;
+  viewer.scene.globe.dynamicAtmosphereLighting = true;
+  viewer.scene.globe.dynamicAtmosphereLightingFromSun = true;
   viewer.scene.highDynamicRange = true;
   viewer.scene.globe.depthTestAgainstTerrain = false;
   viewer.scene.skyAtmosphere.show = true;
@@ -703,7 +717,9 @@ export function bindIssShadowCamera(
     isPointLight: false,
     cascadesEnabled: false,
     size: 2048,
-    fromLightSource: false,
+    fromLightSource: true,
+    darkness: 0.2,
+    fadingEnabled: false,
   });
 
   const remove = scene.preRender.addEventListener(() => {
@@ -804,27 +820,14 @@ Invoke-WebRequest "$base/assets/higher_order_scattering.bin" -OutFile public/atm
 
 `https://media.githubusercontent.com/media/takram-design-engineering/three-geospatial/9c6dfd0054f077f3ad4695b802e74d4c6a814440/packages/atmosphere/assets/`
 
-- [ ] **Step 2: 关掉 AerialPerspective 的 ACES/OETF**
+- [ ] **Step 2: 改为 Cesium tonemap 后的显示空间合成**
 
-在 `src/atmosphere/bruneton/shaders/aerialPerspectiveEffect.frag` 把：
+删除移植代码中的 `ACESFilmic`。Cesium 1.140 已在用户 stage 之前完成 PBR Neutral tonemap：
 
-```glsl
-vec4 tonemapDisplay(vec3 linearHdr, float a) {
- vec3 c = ACESFilmic(linearHdr);
- c = pow(c, vec3(1.0 / 2.2));
- return vec4(c, a);
-}
-```
-
-替换为：
-
-```glsl
-vec4 tonemapDisplay(vec3 linearHdr, float a) {
-  return vec4(linearHdr, a);
-}
-```
-
-留下 `ACESFilmic` 函数也可以，但 `tonemapDisplay` 不得再调用它。天空 pass 已输出 `finalColor * u_atmosphereExposure` 线性值，不要在天空 shader 里加 ACES。
+- 天空：`czm_inverseGamma(czm_pbrNeutralTonemapping(radiance * exposure))`。
+- aerial：`czm_gammaCorrect(originalColor)` 解码场景显示色，乘 `transmittance`；`inscatter * exposure` 单独执行 `czm_pbrNeutralTonemapping`，相加后 `czm_inverseGamma`。
+- aerial frag 必须声明并使用 `u_atmosphereExposure`。
+- 不得把 linear inscatter 直接加到 `originalColor`，后者已经是显示映射后的颜色。
 
 - [ ] **Step 3: AtmosphereParameters.ts**
 
@@ -1238,7 +1241,7 @@ git commit -m "feat: enable Bruneton atmosphere with native fallback"
 | Viewer HDR、SunLight、无 World Terrain、无 token 底图 | 3 |
 | ISS entity、`iss-cesium.glb`、lookAt | 4 |
 | `getSunDirectionWc`、阴影相机、隐藏 `scene.sun` | 5, 7 |
-| Bruneton 两 pass、线性 HDR、无 ACES、无云 | 6, 7 |
+| Bruneton 两 pass、显示空间兼容合成、无 ACES、无云 | 6, 7 |
 | App 装配顺序与回退文案 | 8 |
 | Vitest 三条 | 2 |
 | NOTICE / MIT | 6 |

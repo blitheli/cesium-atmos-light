@@ -27,7 +27,9 @@ export function bindIssShadowCamera(
     isPointLight: false,
     cascadesEnabled: false,
     size: 2048,
-    fromLightSource: false,
+    fromLightSource: true,
+    darkness: 0.2,
+    fadingEnabled: false,
   });
 
   const remove = scene.preRender.addEventListener(() => {

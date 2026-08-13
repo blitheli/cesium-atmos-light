@@ -17,8 +17,8 @@ export function createViewer(options: {
     skyBox: false,
     shadows: true,
     shouldAnimate: false,
-    animation: false,
-    timeline: false,
+    animation: true,
+    timeline: true,
     geocoder: false,
     homeButton: false,
     sceneModePicker: false,
@@ -42,10 +42,33 @@ export function createViewer(options: {
   }
 
   const viewer = new Cesium.Viewer(options.container, viewerOptions);
-  viewer.clock.currentTime = julianDateForScene();
+  const sceneTime = julianDateForScene();
+  viewer.clock.currentTime = sceneTime;
+  viewer.clock.startTime = Cesium.JulianDate.addHours(
+    sceneTime,
+    -12,
+    new Cesium.JulianDate(),
+  );
+  viewer.clock.stopTime = Cesium.JulianDate.addHours(
+    sceneTime,
+    12,
+    new Cesium.JulianDate(),
+  );
+  viewer.clock.multiplier = 1;
+  viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
   viewer.clock.shouldAnimate = false;
+  viewer.timeline?.zoomTo(viewer.clock.startTime, viewer.clock.stopTime);
   viewer.resolutionScale = window.devicePixelRatio;
   viewer.scene.globe.enableLighting = true;
+  // Cesium fades day/night shading out below roughly 10,000 km by default.
+  // Keep it active for the 408 km ISS camera without introducing a zero-width fade.
+  viewer.scene.globe.lightingFadeOutDistance = 0;
+  viewer.scene.globe.lightingFadeInDistance = 1;
+  viewer.scene.globe.dynamicAtmosphereLighting = true;
+  viewer.scene.globe.dynamicAtmosphereLightingFromSun = true;
+  // ISS shadow map is a ~240 m ortho volume; ECEF float precision makes distant
+  // globe samples look shadowed. Keep self-shadowing on the ISS model only.
+  viewer.scene.globe.shadows = Cesium.ShadowMode.DISABLED;
   viewer.scene.highDynamicRange = true;
   viewer.scene.globe.depthTestAgainstTerrain = false;
   if (viewer.scene.skyAtmosphere) {
