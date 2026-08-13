@@ -9,6 +9,10 @@ import {
 } from "./config/scene";
 import { addIssEntity } from "./iss/addIssEntity";
 import { bindIssShadowCamera } from "./iss/issShadowCamera";
+import {
+  enableBrunetonAtmosphere,
+  type BrunetonAtmosphereHandle,
+} from "./atmosphere/bruneton";
 import { StatusBanner } from "./ui/StatusBanner";
 
 export default function App() {
@@ -18,9 +22,12 @@ export default function App() {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const viewer = createViewer({ container });
-    const entity = addIssEntity(viewer);
 
+    let cancelled = false;
+    let handle: BrunetonAtmosphereHandle | undefined;
+    let unbindShadow: (() => void) | undefined;
+    const viewer = createViewer({ container });
+    addIssEntity(viewer);
     viewer.camera.lookAt(
       issPosition(),
       new Cesium.HeadingPitchRange(
@@ -30,24 +37,33 @@ export default function App() {
       ),
     );
     viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    unbindShadow = bindIssShadowCamera(viewer, issPosition());
 
-    const unbindShadow = bindIssShadowCamera(viewer, issPosition());
-
-    const errorListener = viewer.scene.renderError.addEventListener(() => {
-      setMessage("iss-cesium.glb 未加载");
-    });
-
-    const timeoutId = window.setTimeout(() => {
-      const model = entity.model;
-      if (!model) {
-        setMessage("iss-cesium.glb 未加载");
-      }
+    const modelTimer = window.setTimeout(() => {
+      const found = viewer.entities.values.some((e) => e.name === "ISS" && e.model);
+      if (!found) setMessage("iss-cesium.glb 未加载");
     }, 8000);
 
+    enableBrunetonAtmosphere(viewer)
+      .then((h) => {
+        if (cancelled) {
+          h.destroy();
+          return;
+        }
+        handle = h;
+      })
+      .catch((err: unknown) => {
+        console.error(err);
+        if (!cancelled) {
+          setMessage("Bruneton 大气未加载，已使用 Cesium 原生大气");
+        }
+      });
+
     return () => {
-      window.clearTimeout(timeoutId);
-      errorListener();
-      unbindShadow();
+      cancelled = true;
+      window.clearTimeout(modelTimer);
+      handle?.destroy();
+      unbindShadow?.();
       destroyViewer(viewer);
     };
   }, []);
