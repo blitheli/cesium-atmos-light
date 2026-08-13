@@ -48,7 +48,9 @@ export function createViewer(options: {
   viewer.scene.globe.enableLighting = true;
   viewer.scene.highDynamicRange = true;
   viewer.scene.globe.depthTestAgainstTerrain = false;
-  viewer.scene.skyAtmosphere.show = true;
+  if (viewer.scene.skyAtmosphere) {
+    viewer.scene.skyAtmosphere.show = true;
+  }
   viewer.scene.globe.showGroundAtmosphere = true;
   viewer.scene.fog.enabled = false;
   return viewer;

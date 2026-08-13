@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { getSunDirectionWc } from "../cesium/sunDirection";
+import { Engine, getSceneContext } from "../cesium/engineApi";
 
 const HALF = 120;
 const EYE_DIST = 400;
@@ -17,10 +18,10 @@ export function bindIssShadowCamera(
   frustum.right = HALF;
   frustum.top = HALF;
   frustum.bottom = -HALF;
-  lightCamera.frustum = frustum;
+  (lightCamera as { frustum: Cesium.OrthographicOffCenterFrustum }).frustum = frustum;
 
-  scene.shadowMap = new Cesium.ShadowMap({
-    context: scene.context,
+  scene.shadowMap = new Engine.ShadowMap({
+    context: getSceneContext(scene),
     lightCamera,
     enabled: true,
     isPointLight: false,

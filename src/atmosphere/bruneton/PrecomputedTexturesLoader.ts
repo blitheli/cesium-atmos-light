@@ -1,14 +1,20 @@
 import * as Cesium from "cesium";
 import { PRECOMPUTE_CONSTANTS } from "./AtmosphereParameters";
+import {
+  Engine,
+  type EngineContext,
+  type EngineTexture,
+  type EngineTexture3D,
+} from "../../cesium/engineApi";
 
 const C = PRECOMPUTE_CONSTANTS;
 
 export interface BrunetonTextures {
-  transmittanceTexture: Cesium.Texture;
-  irradianceTexture: Cesium.Texture;
-  scatteringTexture: Cesium.Texture3D;
-  singleMieScatteringTexture: Cesium.Texture3D;
-  higherOrderScatteringTexture: Cesium.Texture3D;
+  transmittanceTexture: EngineTexture;
+  irradianceTexture: EngineTexture;
+  scatteringTexture: EngineTexture3D;
+  singleMieScatteringTexture: EngineTexture3D;
+  higherOrderScatteringTexture: EngineTexture3D;
 }
 
 function float16ToFloat32(u16: number): number {
@@ -41,28 +47,28 @@ function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
   });
 }
 
-function makeSampler(): Cesium.Sampler {
-  return new Cesium.Sampler({
+function makeSampler() {
+  return new Engine.Sampler({
     minificationFilter: Cesium.TextureMinificationFilter.LINEAR,
     magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR,
-    wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
-    wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
+    wrapS: Engine.TextureWrap.CLAMP_TO_EDGE,
+    wrapT: Engine.TextureWrap.CLAMP_TO_EDGE,
   });
 }
 
-function makeSampler3D(): Cesium.Sampler {
-  return new Cesium.Sampler({
+function makeSampler3D() {
+  return new Engine.Sampler({
     minificationFilter: Cesium.TextureMinificationFilter.LINEAR,
     magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR,
-    wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
-    wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
-    wrapR: Cesium.TextureWrap.CLAMP_TO_EDGE,
+    wrapS: Engine.TextureWrap.CLAMP_TO_EDGE,
+    wrapT: Engine.TextureWrap.CLAMP_TO_EDGE,
+    wrapR: Engine.TextureWrap.CLAMP_TO_EDGE,
   });
 }
 
 export async function loadPrecomputedTextures(
   baseUrl: string,
-  context: Cesium.Context,
+  context: EngineContext,
 ): Promise<BrunetonTextures> {
   const base = baseUrl.replace(/\/?$/, "/");
 
@@ -89,7 +95,7 @@ export async function loadPrecomputedTextures(
   const singleMieScatterF32 = decodeFloat16ToFloat32(singleMieScatterBuf);
   const higherOrderScatterF32 = decodeFloat16ToFloat32(higherOrderScatterBuf);
 
-  const transmittanceTexture = new Cesium.Texture({
+  const transmittanceTexture = new Engine.Texture({
     context,
     width: tw,
     height: th,
@@ -99,7 +105,7 @@ export async function loadPrecomputedTextures(
     sampler: makeSampler(),
   });
 
-  const irradianceTexture = new Cesium.Texture({
+  const irradianceTexture = new Engine.Texture({
     context,
     width: iw,
     height: ih,
@@ -109,7 +115,7 @@ export async function loadPrecomputedTextures(
     sampler: makeSampler(),
   });
 
-  const scatteringTexture = new Cesium.Texture3D({
+  const scatteringTexture = new Engine.Texture3D({
     context,
     width: sw,
     height: sh,
@@ -120,7 +126,7 @@ export async function loadPrecomputedTextures(
     sampler: makeSampler3D(),
   });
 
-  const singleMieScatteringTexture = new Cesium.Texture3D({
+  const singleMieScatteringTexture = new Engine.Texture3D({
     context,
     width: sw,
     height: sh,
@@ -131,7 +137,7 @@ export async function loadPrecomputedTextures(
     sampler: makeSampler3D(),
   });
 
-  const higherOrderScatteringTexture = new Cesium.Texture3D({
+  const higherOrderScatteringTexture = new Engine.Texture3D({
     context,
     width: sw,
     height: sh,
