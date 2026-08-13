@@ -8,6 +8,7 @@ import {
   issPosition,
 } from "./config/scene";
 import { addIssEntity } from "./iss/addIssEntity";
+import { bindIssShadowCamera } from "./iss/issShadowCamera";
 import { StatusBanner } from "./ui/StatusBanner";
 
 export default function App() {
@@ -30,6 +31,8 @@ export default function App() {
     );
     viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
 
+    const unbindShadow = bindIssShadowCamera(viewer, issPosition());
+
     const errorListener = viewer.scene.renderError.addEventListener(() => {
       setMessage("iss-cesium.glb 未加载");
     });
@@ -44,6 +47,7 @@ export default function App() {
     return () => {
       window.clearTimeout(timeoutId);
       errorListener();
+      unbindShadow();
       destroyViewer(viewer);
     };
   }, []);
