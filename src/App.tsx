@@ -11,8 +11,6 @@ import {
   type TimePreset,
   type ViewPreset,
 } from "./config/presets";
-import { addIssEntity } from "./iss/addIssEntity";
-import { bindIssShadowCamera } from "./iss/issShadowCamera";
 import {
   enableBrunetonAtmosphere,
   type BrunetonAtmosphereHandle,
@@ -27,12 +25,12 @@ function configureIssOrbitControls(viewer: Cesium.Viewer): void {
   controller.enableTilt = true;
   controller.enableTranslate = false;
   controller.enableLook = false;
-  // Distances are relative to the lookAt target (ISS), not Earth center.
+  // Distances are relative to the lookAt target (ISS slot), not Earth center.
   controller.minimumZoomDistance = 40;
   controller.maximumZoomDistance = 8000;
 }
 
-/** Zoom/orbit around ISS. Keep lookAt active so mouse rotate + scroll zoom work. */
+/** Zoom/orbit around the ISS slot. Keep lookAt active so mouse rotate + scroll zoom work. */
 function applyViewPreset(viewer: Cesium.Viewer, preset: ViewPreset): void {
   viewer.trackedEntity = undefined;
   viewer.camera.lookAt(
@@ -48,7 +46,6 @@ function applyViewPreset(viewer: Cesium.Viewer, preset: ViewPreset): void {
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Cesium.Viewer | null>(null);
-  const issRef = useRef<Cesium.Entity | null>(null);
   const brunetonRef = useRef<BrunetonAtmosphereHandle | null>(null);
 
   const [message, setMessage] = useState<string | null>(null);
@@ -58,38 +55,25 @@ export default function App() {
     useState<AtmosphereMode>("native");
   const [timePresetId, setTimePresetId] = useState(DEFAULT_TIME_PRESET_ID);
   const [viewPresetId, setViewPresetId] = useState(DEFAULT_VIEW_PRESET_ID);
-  const [shadows, setShadows] = useState(true);
   const [lighting, setLighting] = useState(true);
   const [hdr, setHdr] = useState(true);
-  const [issVisible, setIssVisible] = useState(true);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     let cancelled = false;
-    let unbindShadow: (() => void) | undefined;
     const viewer = createViewer({ container });
     viewerRef.current = viewer;
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__viewer = viewer;
     }
-    const entity = addIssEntity(viewer);
-    issRef.current = entity;
     configureIssOrbitControls(viewer);
 
     const defaultView =
       VIEW_PRESETS.find((p) => p.id === DEFAULT_VIEW_PRESET_ID) ??
       VIEW_PRESETS[0];
     applyViewPreset(viewer, defaultView);
-    unbindShadow = bindIssShadowCamera(viewer, issPosition());
-
-    const modelTimer = window.setTimeout(() => {
-      const found = viewer.entities.values.some(
-        (e) => e.name === "ISS" && e.model,
-      );
-      if (!found) setMessage("iss-cesium.glb 未加载");
-    }, 8000);
 
     enableBrunetonAtmosphere(viewer)
       .then((h) => {
@@ -115,18 +99,16 @@ export default function App() {
 
     return () => {
       cancelled = true;
-      window.clearTimeout(modelTimer);
       brunetonRef.current?.destroy();
       brunetonRef.current = null;
-      unbindShadow?.();
       viewerRef.current = null;
-      issRef.current = null;
       destroyViewer(viewer);
     };
   }, []);
 
   const onAtmosphereMode = (mode: AtmosphereMode) => {
     const handle = brunetonRef.current;
+    const viewer = viewerRef.current;
     if (mode === "bruneton") {
       if (!handle) return;
       handle.setEnabled(true);
@@ -134,6 +116,9 @@ export default function App() {
       return;
     }
     handle?.setEnabled(false);
+    if (viewer) {
+      viewer.scene.globe.enableLighting = lighting;
+    }
     setAtmosphereMode("native");
   };
 
@@ -151,17 +136,9 @@ export default function App() {
     setViewPresetId(preset.id);
   };
 
-  const onShadows = (value: boolean) => {
-    const viewer = viewerRef.current;
-    if (viewer?.shadowMap) {
-      viewer.shadowMap.enabled = value;
-    }
-    setShadows(value);
-  };
-
   const onLighting = (value: boolean) => {
     const viewer = viewerRef.current;
-    if (viewer) {
+    if (viewer && atmosphereMode !== "bruneton") {
       viewer.scene.globe.enableLighting = value;
     }
     setLighting(value);
@@ -173,14 +150,6 @@ export default function App() {
       viewer.scene.highDynamicRange = value;
     }
     setHdr(value);
-  };
-
-  const onIssVisible = (value: boolean) => {
-    const entity = issRef.current;
-    if (entity) {
-      entity.show = value;
-    }
-    setIssVisible(value);
   };
 
   return (
@@ -196,14 +165,10 @@ export default function App() {
         onTimePreset={onTimePreset}
         viewPresetId={viewPresetId}
         onViewPreset={onViewPreset}
-        shadows={shadows}
         lighting={lighting}
         hdr={hdr}
-        issVisible={issVisible}
-        onShadows={onShadows}
         onLighting={onLighting}
         onHdr={onHdr}
-        onIssVisible={onIssVisible}
       />
       <StatusBanner message={message} />
     </div>

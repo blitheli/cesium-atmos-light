@@ -34,27 +34,42 @@ const float METER_TO_LENGTH_UNIT = 0.001; // m -> km
 
 float saturateAP(float x) { return clamp(x, 0.0, 1.0); }
 
+#ifndef RECIPROCAL_PI
+#define RECIPROCAL_PI 0.3183098861837907
+#endif
+
 vec4 tonemapDisplay(vec3 linearHdr, float a) {
   return vec4(linearHdr, a);
 }
 
-// Cesium's PBR Neutral tonemapper runs before custom stages and already writes
-// gamma-encoded display color. PostProcessStage shaders do not define HDR, so
-// czm_gammaCorrect is a no-op — decode with czm_gamma explicitly, apply
-// transmittance in display-linear space, tonemap new inscatter, then encode once.
+// Imagery is treated as Lambertian albedo (three.js SUN_LIGHT+SKY_LIGHT).
+// Decode Cesium's gamma-encoded globe color, light with Bruneton sun/sky
+// irradiance, then apply aerial transmittance + inscatter in one HDR composite.
 vec4 compositeAerialDisplay(
   vec4 originalColor,
   vec3 transmittance,
-  vec3 inscatter
+  vec3 inscatter,
+  vec3 scenePosKm,
+  float sunTransmittance
 ) {
-  vec3 sceneDisplayLinear =
+  vec3 albedo =
     pow(max(originalColor.rgb, vec3(0.0)), vec3(czm_gamma));
-  vec3 atmosphereDisplayLinear =
-    czm_pbrNeutralTonemapping(inscatter * u_atmosphereExposure);
-  vec3 finalDisplayLinear =
-    sceneDisplayLinear * clamp(transmittance, vec3(0.0), vec3(1.0)) +
-    atmosphereDisplayLinear;
-  return vec4(czm_inverseGamma(max(finalDisplayLinear, vec3(0.0))), originalColor.a);
+  vec3 normal = normalize(scenePosKm);
+  vec3 skyIrradiance;
+  vec3 sunIrradiance = GetSunAndSkyIrradiance(
+    scenePosKm,
+    normal,
+    u_sunDirection,
+    skyIrradiance
+  );
+  sunIrradiance *= sunTransmittance;
+  vec3 radiance = albedo * RECIPROCAL_PI * (sunIrradiance + skyIrradiance);
+  vec3 hdr =
+    radiance * clamp(transmittance, vec3(0.0), vec3(1.0)) + inscatter;
+  return vec4(
+    czm_inverseGamma(max(czm_pbrNeutralTonemapping(hdr * u_atmosphereExposure), vec3(0.0))),
+    originalColor.a
+  );
 }
 
 void reconstructRay(out vec3 ro, out vec3 rd) {
@@ -348,14 +363,12 @@ void main() {
       transmittanceW
     );
     float sunTW = getGroundSunTransmittance(scenePosKmApprox / METER_TO_LENGTH_UNIT);
-    vec4 attenuatedColorW = vec4(
-      originalColor.rgb * sunTW,
-      originalColor.a
-    );
     out_FragColor = compositeAerialDisplay(
-      attenuatedColorW,
+      originalColor,
       transmittanceW,
-      inscatterW
+      inscatterW,
+      scenePosKmApprox,
+      sunTW
     );
     return;
   }
@@ -415,11 +428,12 @@ void main() {
     rawForBSM = rawWorldPosMeters;
   }
   float sunT = getGroundSunTransmittance(rawForBSM);
-  vec4 attenuatedColor = vec4(originalColor.rgb * sunT, originalColor.a);
   out_FragColor = compositeAerialDisplay(
-    attenuatedColor,
+    originalColor,
     transmittance,
-    inscatter
+    inscatter,
+    scenePosKm,
+    sunT
   );
 }
 

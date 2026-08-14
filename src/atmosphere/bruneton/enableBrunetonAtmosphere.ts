@@ -88,7 +88,12 @@ export async function enableBrunetonAtmosphere(
     if (viewer.scene.sun) {
       viewer.scene.sun.show = showNative;
     }
+    // Bruneton post-process lighting owns the globe disk; Cesium lighting
+    // would bake day/night into the albedo we treat as unlit imagery.
+    viewer.scene.globe.enableLighting = showNative;
   };
+
+  applyNativeAtmosphere(false);
 
   return {
     setEnabled(next: boolean) {

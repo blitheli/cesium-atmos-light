@@ -509,8 +509,6 @@ void main() {
     finalColor = originalColor.rgb * transmittance * sunTransmittance + inscatter;
   }
 
-  // DEBUG: visualize sky classification (remove after diagnosis)
-  if (isSky) { finalColor = vec3(1.0, 0.0, 0.0); }
   out_FragColor = vec4(finalColor, originalColor.a);
 }
 `;

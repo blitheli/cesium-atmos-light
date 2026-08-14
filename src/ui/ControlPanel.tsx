@@ -16,14 +16,10 @@ export interface ControlPanelProps {
   onTimePreset: (preset: TimePreset) => void;
   viewPresetId: string;
   onViewPreset: (preset: ViewPreset) => void;
-  shadows: boolean;
   lighting: boolean;
   hdr: boolean;
-  issVisible: boolean;
-  onShadows: (value: boolean) => void;
   onLighting: (value: boolean) => void;
   onHdr: (value: boolean) => void;
-  onIssVisible: (value: boolean) => void;
 }
 
 export function ControlPanel(props: ControlPanelProps) {
@@ -37,14 +33,10 @@ export function ControlPanel(props: ControlPanelProps) {
     onTimePreset,
     viewPresetId,
     onViewPreset,
-    shadows,
     lighting,
     hdr,
-    issVisible,
-    onShadows,
     onLighting,
     onHdr,
-    onIssVisible,
   } = props;
 
   return (
@@ -125,26 +117,10 @@ export function ControlPanel(props: ControlPanelProps) {
               <label className="control-panel__switch">
                 <input
                   type="checkbox"
-                  checked={shadows}
-                  onChange={(e) => onShadows(e.target.checked)}
-                />
-                阴影
-              </label>
-              <label className="control-panel__switch">
-                <input
-                  type="checkbox"
                   checked={hdr}
                   onChange={(e) => onHdr(e.target.checked)}
                 />
                 HDR
-              </label>
-              <label className="control-panel__switch">
-                <input
-                  type="checkbox"
-                  checked={issVisible}
-                  onChange={(e) => onIssVisible(e.target.checked)}
-                />
-                ISS 显示
               </label>
             </div>
           </section>
