@@ -17,9 +17,11 @@ export interface ControlPanelProps {
   viewPresetId: string;
   onViewPreset: (preset: ViewPreset) => void;
   shadows: boolean;
+  lighting: boolean;
   hdr: boolean;
   issVisible: boolean;
   onShadows: (value: boolean) => void;
+  onLighting: (value: boolean) => void;
   onHdr: (value: boolean) => void;
   onIssVisible: (value: boolean) => void;
 }
@@ -36,9 +38,11 @@ export function ControlPanel(props: ControlPanelProps) {
     viewPresetId,
     onViewPreset,
     shadows,
+    lighting,
     hdr,
     issVisible,
     onShadows,
+    onLighting,
     onHdr,
     onIssVisible,
   } = props;
@@ -110,6 +114,14 @@ export function ControlPanel(props: ControlPanelProps) {
           <section className="control-panel__section">
             <h3 className="control-panel__label">渲染</h3>
             <div className="control-panel__switches">
+              <label className="control-panel__switch">
+                <input
+                  type="checkbox"
+                  checked={lighting}
+                  onChange={(e) => onLighting(e.target.checked)}
+                />
+                光照
+              </label>
               <label className="control-panel__switch">
                 <input
                   type="checkbox"

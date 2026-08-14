@@ -1,7 +1,7 @@
 # Cesium Bruneton 大气散射 + ISS 近景光照
 
 日期：2026-08-13  
-状态：已批准  
+状态：已批准（2026-08-13 光照与合成链修订）  
 方案：B（原生 Cesium 场景跑通后，用 Bruneton LUT 后处理替换天空/空中透视）
 
 ## 1. 目标
@@ -18,6 +18,7 @@
 - 固定镜头：ISS 在经度 -110°、纬度 45°、高度 408 km；年积日 150、地方平太阳时 17:00。
 - 加载 `public/iss-cesium.glb`（不加载 `iss.glb`）。
 - HDR、太阳光、ISS 自阴影、`DynamicEnvironmentMapManager` IBL。
+- 近地轨道视角保持地球昼夜光照，不使用 Cesium 默认的远距离 lighting fade。
 - 阶段 1：Cesium 原生 `SkyAtmosphere` 先出画面。
 - 阶段 2：关闭原生天空/地面大气，挂 Bruneton 天空 + 空中透视两个 `PostProcessStage`。
 - LUT / shader 失败时回退原生大气，不白屏。
@@ -123,6 +124,8 @@ utcHours = LOCAL_SOLAR_HOUR - ISS_LONGITUDE / 15
 - `shadows: true`，`scene.globe.enableLighting = true`，`scene.highDynamicRange = true`。
 - `scene.light` 保持默认 `SunLight`，由 `clock.currentTime` 驱动。不要换成手写方向的 `DirectionalLight`，也不要另算一套太阳星历。
 - `scene.globe.depthTestAgainstTerrain = false`（ISS 在轨道，不需要地形遮挡测试）。
+- `scene.globe.lightingFadeOutDistance = 0`、`lightingFadeInDistance = 1`。Cesium 默认会在约一万公里以内把昼夜明暗淡出为全亮，这不适用于 408 km 近地轨道镜头。
+- `scene.globe.dynamicAtmosphereLighting = true`、`dynamicAtmosphereLightingFromSun = true`，地表与大气统一使用太阳方向。
 - 地形：WGS84 椭球即可，不拉 World Terrain（近地轨道看地球边缘不需要高精度 DEM）。
 - `resolutionScale = window.devicePixelRatio`，`useBrowserRecommendedResolution = false`。
 - 关掉 animation / timeline / geocoder / homeButton / sceneModePicker / navigationHelpButton / baseLayerPicker / fullscreenButton / infoBox / selectionIndicator。
@@ -158,7 +161,7 @@ getSunDirectionWc(viewer: Cesium.Viewer): Cesium.Cartesian3
 `bindIssShadowCamera(viewer, issPosition) → () => void`
 
 - 阴影正交半宽固定 `120` m（ISS 解量化后约 112×69×59 m，含余量）。
-- 每帧 `scene.preRender`：`s = getSunDirectionWc(viewer)`；阴影相机眼点 `issPosition + s * 400`（太阳一侧），看向 ISS；orthographic 左右/上下 ±120 m，near 1，far 800。把该相机设为 `viewer.shadowMap` 的 light camera（Cesium 允许的公开 API；若版本把 light camera 设为只读，则改为构造自定义 `ShadowMap` 并赋给 `scene.shadowMap`，不得改 Cesium 源码）。
+- 每帧 `scene.preRender`：`s = getSunDirectionWc(viewer)`；阴影相机眼点 `issPosition + s * 400`（太阳一侧），看向 ISS；orthographic 左右/上下 ±120 m，near 1，far 800。构造自定义 `ShadowMap` 并赋给 `scene.shadowMap`，必须设置 `fromLightSource: true`；`false` 只会生成分析纹理，不会让 Model 接收阴影。建议 `darkness = 0.2`、`fadingEnabled = false`。
 - 返回函数取消 `preRender` 监听。
 
 ## 7. Bruneton 模块接口
@@ -166,7 +169,7 @@ getSunDirectionWc(viewer: Cesium.Viewer): Cesium.Cartesian3
 ```ts
 export interface BrunetonAtmosphereOptions {
   assetsBaseUrl?: string; // 默认 '/atmosphere/'
-  exposure?: number;      // 默认 1.0，乘在天空/透视线性输出上，在 Cesium HDR tonemap 之前
+  exposure?: number;      // 默认 1.0，仅缩放新生成的 Bruneton 辐亮度
 }
 
 export interface BrunetonAtmosphereHandle {
@@ -193,12 +196,14 @@ export function enableBrunetonAtmosphere(
 
 `Handle.destroy()`：移除两个 stage、取消 `preRender` 监听、把 `skyAtmosphere.show`、`globe.showGroundAtmosphere`、`scene.sun.show` 恢复为 `true`（fog 保持 false）。
 
-### 7.1 着色与 tonemap（只留一条）
+### 7.1 着色与 tonemap（Cesium 后处理顺序修订）
 
 - Cesium 主 pass 以 HDR 画出地球 + ISS。
-- 天空 stage：深度为无限远的像素写成 Bruneton 天空 + 太阳圆盘；几何像素原样转交（`u_applyGroundAtmosphere = 0`，避免与透视 pass 叠两层地面大气）。
-- 空中透视 stage：仅对有限深度像素做透射 + 内散射。
-- 移植代码中的 ACES / gamma / OETF **必须关闭**。输出线性颜色，由 Cesium HDR 的 PBR Neutral tonemap 做唯一的显示映射。
+- Cesium 1.140 的执行顺序是：主 pass → 内置 PBR Neutral tonemap → 用户 `PostProcessStage`。用户 stage 不能假定自己位于 tonemap 前。
+- 天空 stage：深度为无限远的像素计算 Bruneton 线性辐亮度，再执行 `czm_pbrNeutralTonemapping` + `czm_inverseGamma`；几何像素原样转交（`u_applyGroundAtmosphere = 0`）。
+- 空中透视 stage：输入已经是 Cesium tonemap 后的显示颜色。先用 `czm_gammaCorrect` 解码到显示线性空间，对场景颜色乘透射率；新增的 Bruneton `inscatter * exposure` 单独经过 `czm_pbrNeutralTonemapping`，相加后用 `czm_inverseGamma` 输出。
+- 不再使用移植代码中的 ACES。该方案是基于 Cesium 公共后处理 API 的显示空间近似，避免把已 tonemap 场景色与未映射的线性辐亮度直接相加。
+- aerial stage 输出为默认 `UNSIGNED_BYTE` 是有意行为，因为输出已是显示映射后的 LDR；天空 stage 可保留 half-float 中间纹理。
 - 长度单位：Cesium 米，LUT 千米，`METER_TO_LENGTH_UNIT = 0.001`（与现有移植一致）。
 
 ### 7.2 资源
@@ -246,13 +251,15 @@ export function enableBrunetonAtmosphere(
 
 - 地球边缘有蓝色气辉，晨昏侧偏橙红。
 - ISS 在前景，太阳侧亮、背光侧有自阴影。
+- 在“正午/傍晚/晨昏”之间切换时，地表明暗必须随太阳方向明显变化。
+- Bruneton 与原生模式切换时，地球盘面的透射与内散射必须有可见差异，不能只有边缘变色。
 - 高 DPI 下模型边缘无明显马赛克（`resolutionScale` 已生效）。
 - 切到 Bruneton 后气辉比原生更接近参考图；失败时仍能看见原生大气和 ISS。
 
 ## 11. 已知差距（本轮接受）
 
 - ISS IBL 仍用 Cesium Nishita 大气球谐，不是 Bruneton 辐照 LUT。
-- 无 LightingMask：ISS 前向 PBR + 整屏空中透视，不是 takram 的混合光照。
+- 无完整 takram LightingMask：ISS 仍是 Cesium 前向 PBR + 太阳自阴影，不能复刻参考实现的环境辐照遮蔽；本轮只保证真实可见的直接光自阴影。
 - 无世界原点 rebase：ISS 用 Cesium RTC，阴影靠专用正交相机，不把地球原点搬到 ISS。
 - 无太阳板对日、无镜头光晕、无体积云。
 
@@ -268,3 +275,9 @@ export function enableBrunetonAtmosphere(
 在 `atmosphere/bruneton/` 保留一份 MIT 归属说明，同时致谢 takram-design-engineering 与 yuwoniu03。
 
 环境变量：`VITE_CESIUM_ION_TOKEN` 可选。
+
+## 13. 回归约束
+
+- `src/renderPipeline.test.ts` 必须检查：`fromLightSource: true`、近地 globe lighting fade、aerial exposure 与显示空间转换、Bruneton 天空显示映射。
+- 修改 Cesium 版本时必须重新核对 `PostProcessStageCollection.execute` 的执行顺序；若用户 stage 能公开插入 tonemap 前，才允许恢复全线性合成。
+- 阴影开关必须产生可见差异；若只有 ShadowMap 纹理更新而模型不变，优先检查 `fromLightSource` 和 `frameState.shadowState.lightShadowMaps`。

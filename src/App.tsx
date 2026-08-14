@@ -59,6 +59,7 @@ export default function App() {
   const [timePresetId, setTimePresetId] = useState(DEFAULT_TIME_PRESET_ID);
   const [viewPresetId, setViewPresetId] = useState(DEFAULT_VIEW_PRESET_ID);
   const [shadows, setShadows] = useState(true);
+  const [lighting, setLighting] = useState(true);
   const [hdr, setHdr] = useState(true);
   const [issVisible, setIssVisible] = useState(true);
 
@@ -70,6 +71,9 @@ export default function App() {
     let unbindShadow: (() => void) | undefined;
     const viewer = createViewer({ container });
     viewerRef.current = viewer;
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__viewer = viewer;
+    }
     const entity = addIssEntity(viewer);
     issRef.current = entity;
     configureIssOrbitControls(viewer);
@@ -96,6 +100,9 @@ export default function App() {
         brunetonRef.current = h;
         setBrunetonReady(true);
         setAtmosphereMode("bruneton");
+        if (import.meta.env.DEV) {
+          (window as unknown as Record<string, unknown>).__atmos = h;
+        }
       })
       .catch((err: unknown) => {
         console.error(err);
@@ -152,6 +159,14 @@ export default function App() {
     setShadows(value);
   };
 
+  const onLighting = (value: boolean) => {
+    const viewer = viewerRef.current;
+    if (viewer) {
+      viewer.scene.globe.enableLighting = value;
+    }
+    setLighting(value);
+  };
+
   const onHdr = (value: boolean) => {
     const viewer = viewerRef.current;
     if (viewer) {
@@ -182,9 +197,11 @@ export default function App() {
         viewPresetId={viewPresetId}
         onViewPreset={onViewPreset}
         shadows={shadows}
+        lighting={lighting}
         hdr={hdr}
         issVisible={issVisible}
         onShadows={onShadows}
+        onLighting={onLighting}
         onHdr={onHdr}
         onIssVisible={onIssVisible}
       />

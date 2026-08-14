@@ -43,6 +43,10 @@ export class AerialPerspectiveEffect {
     this._ready = null;
   }
 
+  setExposure(exposure: number): void {
+    this._atmosphereExposure = exposure;
+  }
+
   async init(): Promise<void> {
     if (this._ready) return this._ready;
     const scene = this.viewer.scene;
