@@ -1,11 +1,18 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import skyStageSource from "./atmosphere/bruneton/AtmospherePostProcess.ts?raw";
 import aerialSource from "./atmosphere/bruneton/shaders/aerialPerspectiveEffect.frag?raw";
 import enableSource from "./atmosphere/bruneton/enableBrunetonAtmosphere.ts?raw";
 import viewerSource from "./cesium/createViewer.ts?raw";
+import issCameraSource from "./cesium/issCamera.ts?raw";
 import shadowCameraSource from "./iss/issShadowCamera.ts?raw";
 import controlPanelSource from "./ui/ControlPanel.tsx?raw";
 import appSource from "./App.tsx?raw";
+
+const controlPanelCss = readFileSync(
+  new URL("./ui/controlPanel.css", import.meta.url),
+  "utf8",
+);
 
 describe("render pipeline integration", () => {
   it("does not load the ISS model or ISS shadow camera", () => {
@@ -14,8 +21,15 @@ describe("render pipeline integration", () => {
   });
 
   it("keeps the camera looking at the ISS slot without loading the model", () => {
-    expect(appSource).toContain("issPosition()");
-    expect(appSource).toContain("lookAt");
+    expect(issCameraSource).toContain("issPosition()");
+    expect(issCameraSource).toContain("lookAt");
+    expect(appSource).toContain("applyViewPreset");
+  });
+
+  it("zooms ISS lookAt range with the mouse wheel", () => {
+    expect(issCameraSource).toContain("bindIssWheelZoom");
+    expect(issCameraSource).toContain("scaleIssCameraRange");
+    expect(appSource).toContain("bindIssWheelZoom");
   });
 
   it("registers the ISS shadow map as a light source", () => {
@@ -37,8 +51,22 @@ describe("render pipeline integration", () => {
     );
   });
 
-  it("shows the native Cesium timeline", () => {
+  it("places the control panel on the left", () => {
+    expect(controlPanelCss).toMatch(/\.control-panel\s*\{[^}]*left:\s*12px/s);
+    expect(controlPanelCss).not.toMatch(/\.control-panel\s*\{[^}]*right:\s*12px/s);
+  });
+
+  it("shows native Cesium widgets", () => {
     expect(viewerSource).toMatch(/timeline:\s*true/);
+    expect(viewerSource).toMatch(/animation:\s*true/);
+    expect(viewerSource).toMatch(/geocoder:\s*true/);
+    expect(viewerSource).toMatch(/homeButton:\s*true/);
+    expect(viewerSource).toMatch(/sceneModePicker:\s*true/);
+    expect(viewerSource).toMatch(/navigationHelpButton:\s*true/);
+    expect(viewerSource).toMatch(/baseLayerPicker:\s*true/);
+    expect(viewerSource).toMatch(/fullscreenButton:\s*true/);
+    expect(viewerSource).toMatch(/infoBox:\s*true/);
+    expect(viewerSource).toMatch(/selectionIndicator:\s*true/);
   });
 
   it("exposes a globe lighting toggle for native atmosphere only", () => {
