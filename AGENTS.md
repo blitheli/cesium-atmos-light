@@ -65,3 +65,7 @@ The target reference is `public/atmos.png` when available. Exact takram `Atmosph
 - Do not edit Cesium under `node_modules`.
 - Do not commit generated `dist/`, Vite cache files, or test result files.
 - Do not commit or push unless the user explicitly requests it.
+
+## Cursor Cloud specific instructions
+
+Cloud agents should use `.cursor/environment.json`. `install` runs `npm ci`; the Vite terminal serves the app at `http://127.0.0.1:5173`. `VITE_CESIUM_ION_TOKEN` is optional: without it the globe uses Cesium's built-in NaturalEarthII imagery. Automated tests do not need WebGL; browser checks of the ISS scene do.
