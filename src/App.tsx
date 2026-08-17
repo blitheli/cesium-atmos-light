@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import * as Cesium from "cesium";
 import { createViewer, destroyViewer } from "./cesium/createViewer";
 import { julianDateForLocalHour } from "./cesium/julianDate";
-import { issPosition } from "./config/scene";
+import {
+  applyViewPreset,
+  bindIssWheelZoom,
+  configureIssOrbitControls,
+} from "./cesium/issCamera";
 import {
   DEFAULT_TIME_PRESET_ID,
   DEFAULT_VIEW_PRESET_ID,
@@ -17,31 +21,6 @@ import {
 } from "./atmosphere/bruneton";
 import { StatusBanner } from "./ui/StatusBanner";
 import { ControlPanel } from "./ui/ControlPanel";
-
-function configureIssOrbitControls(viewer: Cesium.Viewer): void {
-  const controller = viewer.scene.screenSpaceCameraController;
-  controller.enableRotate = true;
-  controller.enableZoom = true;
-  controller.enableTilt = true;
-  controller.enableTranslate = false;
-  controller.enableLook = false;
-  // Distances are relative to the lookAt target (ISS slot), not Earth center.
-  controller.minimumZoomDistance = 40;
-  controller.maximumZoomDistance = 8000;
-}
-
-/** Zoom/orbit around the ISS slot. Keep lookAt active so mouse rotate + scroll zoom work. */
-function applyViewPreset(viewer: Cesium.Viewer, preset: ViewPreset): void {
-  viewer.trackedEntity = undefined;
-  viewer.camera.lookAt(
-    issPosition(),
-    new Cesium.HeadingPitchRange(
-      preset.headingRad,
-      preset.pitchRad,
-      preset.rangeM,
-    ),
-  );
-}
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,6 +48,7 @@ export default function App() {
       (window as unknown as Record<string, unknown>).__viewer = viewer;
     }
     configureIssOrbitControls(viewer);
+    const unbindWheelZoom = bindIssWheelZoom(viewer);
 
     const defaultView =
       VIEW_PRESETS.find((p) => p.id === DEFAULT_VIEW_PRESET_ID) ??
@@ -99,6 +79,7 @@ export default function App() {
 
     return () => {
       cancelled = true;
+      unbindWheelZoom();
       brunetonRef.current?.destroy();
       brunetonRef.current = null;
       viewerRef.current = null;

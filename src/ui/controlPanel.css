@@ -1,7 +1,7 @@
 .control-panel {
   position: absolute;
   top: 12px;
-  right: 12px;
+  left: 12px;
   z-index: 20;
   width: min(260px, calc(100vw - 24px));
   color: #e8eef5;
@@ -11,7 +11,7 @@
 
 .control-panel__toggle {
   pointer-events: auto;
-  float: right;
+  float: left;
   margin-bottom: 8px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 6px;
